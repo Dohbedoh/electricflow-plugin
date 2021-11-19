@@ -1,7 +1,5 @@
 package org.jenkinsci.plugins.electricflow;
 
-import static com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials;
-
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
@@ -15,13 +13,17 @@ import hudson.model.Item;
 import hudson.model.Run;
 import hudson.security.ACL;
 import hudson.util.ListBoxModel;
-import java.util.Collections;
 import jenkins.model.Jenkins;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 
-public class Credential extends AbstractDescribableImpl<Credential> {
+import java.util.Collections;
+import java.util.function.Function;
 
+import static com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials;
+
+public class Credential extends AbstractDescribableImpl<Credential> {
+  
   private String credentialId;
 
   @DataBoundConstructor
@@ -45,16 +47,6 @@ public class Credential extends AbstractDescribableImpl<Credential> {
         CredentialsMatchers.withId(credentialsId));
   }
 
-  private static StandardUsernamePasswordCredentials
-      getStandardUsernamePasswordCredentialsByIdAndRun(String credentialsId, Run run) {
-    if (credentialsId == null) {
-      return null;
-    }
-
-    return CredentialsProvider.findCredentialById(
-        credentialsId, StandardUsernamePasswordCredentials.class, run, Collections.emptyList());
-  }
-
   public String getCredentialId(EnvReplacer envReplacer) {
     return envReplacer == null ? getCredentialId() : envReplacer.expandEnv(getCredentialId());
   }
@@ -63,12 +55,47 @@ public class Credential extends AbstractDescribableImpl<Credential> {
     return credentialId;
   }
 
+  public void setCredentialId(String credentialId) {
+    this.credentialId = credentialId;
+  }
+
   public StandardUsernamePasswordCredentials getUsernamePasswordBasedOnCredentialId(
       EnvReplacer envReplacer, Run run) {
-    String credentialIdResolved = getCredentialId(envReplacer);
-    return run == null
-        ? getStandardUsernamePasswordCredentialsById(credentialIdResolved)
-        : getStandardUsernamePasswordCredentialsByIdAndRun(credentialIdResolved, run);
+    return getUsernamePasswordBasedOnCredentialId(envReplacer, credentialsId ->
+        run == null
+            ? getStandardUsernamePasswordCredentialsById(credentialsId)
+            : CredentialsProvider.findCredentialById(
+                credentialsId, 
+                StandardUsernamePasswordCredentials.class, 
+                run, 
+                Collections.emptyList())
+    );
+  }
+
+  public StandardUsernamePasswordCredentials getUsernamePasswordBasedOnCredentialId(
+      EnvReplacer envReplacer, Item item) {
+    
+    return getUsernamePasswordBasedOnCredentialId(envReplacer, credentialsId -> 
+        item == null
+          ? getStandardUsernamePasswordCredentialsById(credentialsId)
+          : CredentialsMatchers.firstOrNull(
+              lookupCredentials(
+                  StandardUsernamePasswordCredentials.class,
+                  item,
+                  ACL.SYSTEM,
+                  new SchemeRequirement("http"),
+                  new SchemeRequirement("https")),
+              CredentialsMatchers.withId(credentialsId))
+    );
+  }
+
+  private StandardUsernamePasswordCredentials getUsernamePasswordBasedOnCredentialId(
+      EnvReplacer envReplacer, Function<String, StandardUsernamePasswordCredentials> credSupplier) {
+    String resolvedCredentialsId = getCredentialId(envReplacer);
+    if (resolvedCredentialsId == null) {
+      return null;
+    }
+    return credSupplier.apply(getCredentialId(envReplacer));
   }
 
   @Extension

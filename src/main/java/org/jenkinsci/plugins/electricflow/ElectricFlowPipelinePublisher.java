@@ -8,17 +8,6 @@
 
 package org.jenkinsci.plugins.electricflow;
 
-import static org.jenkinsci.plugins.electricflow.Utils.addParametersToJsonAndPreserveStored;
-import static org.jenkinsci.plugins.electricflow.Utils.expandParameters;
-import static org.jenkinsci.plugins.electricflow.Utils.formatJsonOutput;
-import static org.jenkinsci.plugins.electricflow.Utils.getParamsMap;
-import static org.jenkinsci.plugins.electricflow.Utils.getValidationComparisonHeaderRow;
-import static org.jenkinsci.plugins.electricflow.Utils.getValidationComparisonRow;
-import static org.jenkinsci.plugins.electricflow.Utils.getValidationComparisonRowsForExtraParameters;
-import static org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils.checkAnySelectItemsIsValidationWrappers;
-import static org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils.getSelectItemValue;
-import static org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils.isSelectItemValidationWrapper;
-
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -35,14 +24,6 @@ import hudson.tasks.Publisher;
 import hudson.tasks.Recorder;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import javax.annotation.Nonnull;
-import javax.servlet.ServletException;
 import jenkins.tasks.SimpleBuildStep;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
@@ -67,6 +48,26 @@ import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
+
+import javax.annotation.Nonnull;
+import javax.servlet.ServletException;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static org.jenkinsci.plugins.electricflow.Utils.addParametersToJsonAndPreserveStored;
+import static org.jenkinsci.plugins.electricflow.Utils.expandParameters;
+import static org.jenkinsci.plugins.electricflow.Utils.formatJsonOutput;
+import static org.jenkinsci.plugins.electricflow.Utils.getParamsMap;
+import static org.jenkinsci.plugins.electricflow.Utils.getValidationComparisonHeaderRow;
+import static org.jenkinsci.plugins.electricflow.Utils.getValidationComparisonRow;
+import static org.jenkinsci.plugins.electricflow.Utils.getValidationComparisonRowsForExtraParameters;
+import static org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils.checkAnySelectItemsIsValidationWrappers;
+import static org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils.getSelectItemValue;
+import static org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils.isSelectItemValidationWrapper;
 
 public class ElectricFlowPipelinePublisher extends Recorder implements SimpleBuildStep {
 
@@ -490,12 +491,13 @@ public class ElectricFlowPipelinePublisher extends Recorder implements SimpleBui
 
     public FormValidation doCheckConfiguration(
         @QueryParameter String value,
-        @QueryParameter boolean validationTrigger,
+        @QueryParameter boolean overrideCredential,
+        @QueryParameter @RelativePath("overrideCredential") String credentialId,
         @AncestorInPath Item item) {
       if (item == null || !item.hasPermission(Item.CONFIGURE)) {
         return FormValidation.ok();
       }
-      return Utils.validateConfiguration(value);
+      return Utils.validateConfiguration(value, overrideCredential ? new Credential(credentialId) : null, item);
     }
 
     public FormValidation doCheckPipelineName(
@@ -575,7 +577,7 @@ public class ElectricFlowPipelinePublisher extends Recorder implements SimpleBui
         Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
         ElectricFlowClient efClient =
             ElectricFlowClientFactory.getElectricFlowClient(
-                configuration, overrideCredentialObj, null, true);
+                configuration, overrideCredentialObj, item, null, true);
         List<String> parameters = efClient.getPipelineFormalParameters(projectName, pipelineName);
         JSONObject main =
             JSONObject.fromObject(
@@ -596,7 +598,7 @@ public class ElectricFlowPipelinePublisher extends Recorder implements SimpleBui
         SelectItemValidationWrapper selectItemValidationWrapper;
 
         Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
-        if (Utils.isEflowAvailable(configuration, overrideCredentialObj)) {
+        if (Utils.isEflowAvailable(configuration, overrideCredentialObj, item)) {
           log.error(
               "Error when fetching set of pipeline parameters. Error message: " + e.getMessage(),
               e);
@@ -638,7 +640,7 @@ public class ElectricFlowPipelinePublisher extends Recorder implements SimpleBui
         return new ListBoxModel();
       }
       Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
-      return Utils.getPipelines(configuration, overrideCredentialObj, projectName);
+      return Utils.getPipelines(configuration, overrideCredentialObj, item, projectName);
     }
 
     public ListBoxModel doFillProjectNameItems(
@@ -650,7 +652,7 @@ public class ElectricFlowPipelinePublisher extends Recorder implements SimpleBui
         return new ListBoxModel();
       }
       Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
-      return Utils.getProjects(configuration, overrideCredentialObj);
+      return Utils.getProjects(configuration, overrideCredentialObj, item);
     }
 
     @Override

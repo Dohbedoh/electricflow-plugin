@@ -8,11 +8,10 @@
 
 package org.jenkinsci.plugins.electricflow;
 
-import static hudson.plugins.git.GitChangeSet.LOGGER;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import hudson.EnvVars;
 import hudson.model.BuildListener;
+import hudson.model.Item;
 import hudson.model.Result;
 import hudson.model.TaskListener;
 import hudson.slaves.EnvironmentVariablesNodeProperty;
@@ -21,16 +20,6 @@ import hudson.slaves.NodePropertyDescriptor;
 import hudson.util.DescribableList;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONArray;
@@ -44,6 +33,17 @@ import org.jenkinsci.plugins.electricflow.ui.FieldValidationStatus;
 import org.jenkinsci.plugins.electricflow.ui.HtmlUtils;
 import org.jenkinsci.plugins.electricflow.ui.SelectFieldUtils;
 import org.jenkinsci.plugins.electricflow.ui.SelectItemValidationWrapper;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class Utils {
 
@@ -145,7 +145,7 @@ public class Utils {
     }
   }
 
-  public static FormValidation validateConfiguration(String configuration) {
+  public static FormValidation validateConfiguration(String configuration, Credential overrideCredentials, Item item) {
     if (configuration == null || configuration.isEmpty()) {
       return FormValidation.warning("Configuration field should not be empty.");
     }
@@ -155,7 +155,7 @@ public class Utils {
     }
 
     try {
-      new ElectricFlowClient(configuration).testConnection();
+      ElectricFlowClientFactory.getElectricFlowClient(configuration, overrideCredentials, item, null, true).testConnection();
     } catch (Exception e) {
       log.error(
           "Connection to CloudBees CD Server Failed. Please fix connection information and reload this page. Error message: "
@@ -248,7 +248,7 @@ public class Utils {
   }
 
   public static ListBoxModel getPipelines(
-      String configuration, Credential overrideCredential, String projectName) {
+      String configuration, Credential overrideCredential, Item item, String projectName) {
     try {
       ListBoxModel m = new ListBoxModel();
 
@@ -259,7 +259,7 @@ public class Utils {
           && SelectFieldUtils.checkAllSelectItemsAreNotValidationWrappers(projectName)) {
         ElectricFlowClient efClient =
             ElectricFlowClientFactory.getElectricFlowClient(
-                configuration, overrideCredential, null, true);
+                configuration, overrideCredential, item, null, true);
         String pipelinesString = efClient.getPipelines(projectName);
 
         if (log.isDebugEnabled()) {
@@ -285,7 +285,7 @@ public class Utils {
 
       return m;
     } catch (Exception e) {
-      if (Utils.isEflowAvailable(configuration, overrideCredential)) {
+      if (Utils.isEflowAvailable(configuration, overrideCredential, item)) {
         log.error(
             "Error when fetching values for this parameter - pipeline. Error message: "
                 + e.getMessage(),
@@ -297,19 +297,19 @@ public class Utils {
     }
   }
 
-  public static boolean isEflowAvailable(String configuration, Credential overrideCredential) {
+  public static boolean isEflowAvailable(String configuration, Credential overrideCredential, Item item) {
     try {
-      ElectricFlowClientFactory.getElectricFlowClient(configuration, overrideCredential, null, true)
+      ElectricFlowClientFactory.getElectricFlowClient(configuration, overrideCredential, item, null, true)
           .testConnection();
       return true;
     } catch (Exception e) {
       return false;
     }
   }
-  public static ListBoxModel getProjects(String configuration, Credential overrideCredential) {
-    return getProjects(configuration, overrideCredential, true);
+  public static ListBoxModel getProjects(String configuration, Credential overrideCredential, Item item) {
+    return getProjects(configuration, overrideCredential, item, true);
   }
-  public static ListBoxModel getProjects(String configuration, Credential overrideCredential, boolean warnOnSelectProject) {
+  public static ListBoxModel getProjects(String configuration, Credential overrideCredential, Item item, boolean warnOnSelectProject) {
     try {
       ListBoxModel m = new ListBoxModel();
 
@@ -323,7 +323,7 @@ public class Utils {
       if (!configuration.isEmpty()) {
         ElectricFlowClient efClient =
             ElectricFlowClientFactory.getElectricFlowClient(
-                configuration, overrideCredential, null, true);
+                configuration, overrideCredential, item, null, true);
         String projectsString = efClient.getProjects();
         JSONObject jsonObject = JSONObject.fromObject(projectsString);
         JSONArray projects = jsonObject.getJSONArray("project");
@@ -342,7 +342,7 @@ public class Utils {
 
       return m;
     } catch (Exception e) {
-      if (Utils.isEflowAvailable(configuration, overrideCredential)) {
+      if (Utils.isEflowAvailable(configuration, overrideCredential, item)) {
         log.error(
             "Error when fetching values for this parameter - project. Error message: "
                 + e.getMessage(),

@@ -81,7 +81,7 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
       CloudBeesFlowBuildData cloudBeesFlowBuildData = new CloudBeesFlowBuildData(run);
       EnvReplacer env = new EnvReplacer(run, taskListener);
       ElectricFlowClient efClient =
-          ElectricFlowClientFactory.getElectricFlowClient(configuration, overrideCredential, env);
+          ElectricFlowClientFactory.getElectricFlowClient(configuration, overrideCredential, run, env, false);
       PrintStream logger = taskListener.getLogger();
 
       // Calling the actual logic
@@ -280,12 +280,13 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
 
     public FormValidation doCheckConfiguration(
         @QueryParameter String value,
-        @QueryParameter boolean validationTrigger,
+        @QueryParameter boolean overrideCredential,
+        @QueryParameter @RelativePath("overrideCredential") String credentialId,
         @AncestorInPath Item item) {
       if (item == null || !item.hasPermission(Item.CONFIGURE)) {
         return FormValidation.ok();
       }
-      return Utils.validateConfiguration(value);
+      return Utils.validateConfiguration(value, overrideCredential ? new Credential(credentialId) : null, item);
     }
 
     public FormValidation doCheckProjectName(
@@ -347,7 +348,7 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
         return new ListBoxModel();
       }
       Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
-      return Utils.getProjects(configuration, overrideCredentialObj);
+      return Utils.getProjects(configuration, overrideCredentialObj, item);
     }
 
     public ListBoxModel doFillReleaseNameItems(
@@ -372,7 +373,7 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
               overrideCredential ? new Credential(credentialId) : null;
           ElectricFlowClient client =
               ElectricFlowClientFactory.getElectricFlowClient(
-                  configuration, overrideCredentialObj, null, true);
+                  configuration, overrideCredentialObj, item, null, true);
 
           // List<String> releasesList = client.getReleases(configuration, projectName);
           List<String> releasesList = client.getReleaseNames(configuration, projectName);
@@ -385,7 +386,7 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
         return m;
       } catch (Exception e) {
         Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
-        if (Utils.isEflowAvailable(configuration, overrideCredentialObj)) {
+        if (Utils.isEflowAvailable(configuration, overrideCredentialObj, item)) {
           log.error(
               "Error when fetching values for this parameter - release. Error message: "
                   + e.getMessage(),
@@ -423,7 +424,7 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
               overrideCredential ? new Credential(credentialId) : null;
           ElectricFlowClient client =
               ElectricFlowClientFactory.getElectricFlowClient(
-                  configuration, overrideCredentialObj, null, true);
+                  configuration, overrideCredentialObj, item, null, true);
 
           List<Map<String, Object>> pipelineRuns =
               client.getReleaseRuns(configuration, projectName, releaseName);
@@ -436,7 +437,7 @@ public class ElectricFlowAssociateBuildToRelease extends Recorder implements Sim
         return m;
       } catch (Exception e) {
         Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
-        if (Utils.isEflowAvailable(configuration, overrideCredentialObj)) {
+        if (Utils.isEflowAvailable(configuration, overrideCredentialObj, item)) {
           log.error(
               "Error when fetching values for this parameter - release. Error message: "
                   + e.getMessage(),

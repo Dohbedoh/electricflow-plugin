@@ -1,6 +1,7 @@
 package org.jenkinsci.plugins.electricflow.factories;
 
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import hudson.model.Item;
 import hudson.model.Run;
 import org.jenkinsci.plugins.electricflow.Configuration;
 import org.jenkinsci.plugins.electricflow.Credential;
@@ -8,31 +9,45 @@ import org.jenkinsci.plugins.electricflow.ElectricFlowClient;
 import org.jenkinsci.plugins.electricflow.EnvReplacer;
 import org.jenkinsci.plugins.electricflow.Utils;
 
+import java.util.function.Supplier;
+
 public class ElectricFlowClientFactory {
 
   public static ElectricFlowClient getElectricFlowClient(
-      String configurationName, Credential overrideCredential, EnvReplacer envReplacer) {
-    return getElectricFlowClient(configurationName, overrideCredential, envReplacer, false);
-  }
-
-  public static ElectricFlowClient getElectricFlowClient(
       String configurationName,
       Credential overrideCredential,
+      Item item,
       EnvReplacer envReplacer,
       boolean ignoreUnresolvedOverrideCredential) {
+
     return getElectricFlowClient(
         configurationName,
-        overrideCredential,
-        null,
-        envReplacer,
-        ignoreUnresolvedOverrideCredential);
+        overrideCredential == null
+            ? null
+            : () -> overrideCredential.getUsernamePasswordBasedOnCredentialId(envReplacer, item),
+        ignoreUnresolvedOverrideCredential
+    );
   }
 
   public static ElectricFlowClient getElectricFlowClient(
       String configurationName,
       Credential overrideCredential,
-      Run run,
-      EnvReplacer envReplacer,
+      final Run run,
+      final EnvReplacer envReplacer,
+      boolean ignoreUnresolvedOverrideCredential) {
+    
+    return getElectricFlowClient(
+        configurationName,
+        overrideCredential == null 
+            ? null 
+            : () -> overrideCredential.getUsernamePasswordBasedOnCredentialId(envReplacer, run),
+        ignoreUnresolvedOverrideCredential
+    );
+  }
+
+  private static ElectricFlowClient getElectricFlowClient(
+      String configurationName,
+      Supplier<StandardUsernamePasswordCredentials> overrideCredentialSupplier,
       boolean ignoreUnresolvedOverrideCredential) {
     Configuration cred = Utils.getConfigurationByName(configurationName);
 
@@ -47,12 +62,11 @@ public class ElectricFlowClientFactory {
 
     String username;
     String password;
-    if (overrideCredential == null) {
+    if (overrideCredentialSupplier == null) {
       username = cred.getElectricFlowUser();
       password = cred.getElectricFlowPassword().getPlainText();
     } else {
-      StandardUsernamePasswordCredentials creds =
-          overrideCredential.getUsernamePasswordBasedOnCredentialId(envReplacer, run);
+      StandardUsernamePasswordCredentials creds = overrideCredentialSupplier.get();
       if (creds == null) {
         if (ignoreUnresolvedOverrideCredential) {
           username = cred.getElectricFlowUser();

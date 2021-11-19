@@ -23,14 +23,7 @@ import hudson.tasks.Publisher;
 import hudson.tasks.Recorder;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.util.List;
-import javax.annotation.Nonnull;
 import jenkins.tasks.SimpleBuildStep;
-import net.sf.json.JSONObject;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jenkinsci.Symbol;
@@ -41,7 +34,13 @@ import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
+
+import javax.annotation.Nonnull;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 public class ElectricFlowUploadArtifactPublisher extends Recorder implements SimpleBuildStep {
 
@@ -326,11 +325,14 @@ public class ElectricFlowUploadArtifactPublisher extends Recorder implements Sim
     }
 
     public FormValidation doCheckConfiguration(
-        @QueryParameter String value, @AncestorInPath Item item) {
+        @QueryParameter String value,
+        @QueryParameter boolean overrideCredential,
+        @QueryParameter @RelativePath("overrideCredential") String credentialId,
+        @AncestorInPath Item item) {
       if (item == null || !item.hasPermission(Item.CONFIGURE)) {
         return FormValidation.ok();
       }
-      return Utils.validateValueOnEmpty(value, "Configuration");
+      return Utils.validateConfiguration(value, overrideCredential ? new Credential(credentialId) : null, item);
     }
 
     public FormValidation doCheckFilePath(@QueryParameter String value, @AncestorInPath Item item) {
@@ -379,7 +381,7 @@ public class ElectricFlowUploadArtifactPublisher extends Recorder implements Sim
         Credential overrideCredentialObj = overrideCredential ? new Credential(credentialId) : null;
         ElectricFlowClient efClient =
             ElectricFlowClientFactory.getElectricFlowClient(
-                configuration, overrideCredentialObj, null, true);
+                configuration, overrideCredentialObj, item, null, true);
         List<String> repositories;
 
         repositories = efClient.getArtifactRepositories();
